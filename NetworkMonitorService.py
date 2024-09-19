@@ -21,7 +21,7 @@ class NetworkMonitorService(win32serviceutil.ServiceFramework):
         self.running = True
 
         # Configuration
-        self.target = "8.8.8.8"
+        self.target = "www.baidu.com"
         self.default_gateway = "192.168.110.1"
         self.backup_gateway = "192.168.110.11"
         self.interval = 20  # seconds
@@ -43,9 +43,16 @@ class NetworkMonitorService(win32serviceutil.ServiceFramework):
     def main(self):
         print(self.adapter_name)
         while self.running:
-            if self.ping_target(self.target):
-                # self.set_gateway(self.default_gateway)
-                print('主网络正常')
+            if self.ping_target(self.default_gateway):
+                # 判断当前是否使用备用网络，如果是切换为主网络
+                if self.get_backup_gateway_ip(self.adapter_name):
+                    print('当前为备用网关状态')
+                    self.set_gateway(self.default_gateway)
+                else:
+                    self.ping_target(self.target)
+                    # self.set_gateway(self.default_gateway)
+                    # print(self.get_current_ip(self.adapter_name))
+                    print('当前为：主网络状态')
             else:
                 print('启用备用网络')
                 self.set_gateway(self.backup_gateway)
@@ -78,9 +85,17 @@ class NetworkMonitorService(win32serviceutil.ServiceFramework):
                 return line.split()[-1]  # 返回连接状态的适配器名称
         return None
 
+    def get_backup_gateway_ip(self, adapter_name):
+        # 获取当前IP
+        result = subprocess.run(f'netsh interface ip show config name="{adapter_name}"', shell=True,
+                                capture_output=True, text=True)
+        if " IP 地址:                           192.168.108" in result.stdout:
+            return 1  # 返回1
+
     def is_dhcp_enabled(self, adapter_name):
         result = subprocess.run(f'netsh interface ip show config name="{adapter_name}"', shell=True,
                                 capture_output=True, text=True)
+        print(result)
         return "DHCP 已启用:                          是" in result.stdout
 
     def release_renew_dhcp(self, adapter_name):
